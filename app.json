@@ -1,0 +1,8 @@
+{
+  "name": "USB Control",
+  "description": "Example client to client USB - gamepad to arduino servo control",
+  "repository": "https://github.com/reliableJARED/WebGL/tree/gh-pages/webUSB",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/7/7f/Robot.svg",
+  "keywords": ["heroku", "gamepad", "node","client to client", "arduino motor"],
+  "image": "heroku/nodejs"
+}
