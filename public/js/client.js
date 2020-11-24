@@ -1,5 +1,81 @@
+/*Configuration of peer to peer
 
+*/
+const peerConnections = {};
+const config = {
+  iceServers: [
+    {
+      urls: ["stun:stun.l.google.com:19302"]
+    }
+  ]
+};
 
+const socket = io.connect(window.location.origin);
+const video = document.querySelector("video");
+
+// Media constraints
+const constraints = {
+  video: { facingMode: "user" },
+  audio: false //without audio buffer may get feedback
+};
+
+//get camera
+navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+    
+    video.srcObject = stream;
+    socket.emit("emitter");
+  
+  }).catch(error => console.error(error));
+  
+/***** socket handle section for video connection *****/
+socket.on("receiver", id => {
+  const peerConnection = new RTCPeerConnection(config);
+  peerConnections[id] = peerConnection;
+
+  //add the local stream to the connection using the addTrack() method and passing our stream and track data
+  let stream = video.srcObject;
+  stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+    
+  peerConnection.onicecandidate = event => {
+    if (event.candidate) {
+      socket.emit("candidate", id, event.candidate);
+    }
+  };
+
+  peerConnection.createOffer().then(sdp => peerConnection.setLocalDescription(sdp))
+    .then(() => {
+      socket.emit("offer", id, peerConnection.localDescription);
+    });
+    
+    peerConnection.ontrack = event => {
+    video.srcObject = event.streams[0];
+    };
+    
+});
+
+socket.on("answer", (id, description) => {
+  peerConnections[id].setRemoteDescription(description);
+});
+
+socket.on("candidate", (id, candidate) => {
+  peerConnections[id].addIceCandidate(new RTCIceCandidate(candidate));
+});
+
+socket.on("disconnectPeer", id => {
+  peerConnections[id].close();
+  delete peerConnections[id];
+});
+ 
+//close the socket connection if the user closes the window.
+window.onunload = window.onbeforeunload = () => {
+  socket.close();
+};
+
+/***********/
+  
+/*
+USB Controller and Canvas
+*/
 // Get the canvas element form the page
 const canvas = document.getElementById("canvas");
  
@@ -14,7 +90,6 @@ ctx.fillText("connect a gamepad to USB port, then press any button to start.  ON
 
 //default size for the box to be controlled on the screen
 const boxSize = 10;
-
 
 
 function animate(posX,posY){
@@ -52,8 +127,8 @@ window.addEventListener("gamepadconnected", function(e){
   console.log('gamepad connected: %s',e.gamepad.id);
   
   //starting point of the box
-  var posX = 0;
-  var posY = 0;
+  let posX = 0;
+  let posY = 0;
   
   animate(posX,posY);
 });
