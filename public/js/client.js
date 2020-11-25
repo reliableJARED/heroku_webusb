@@ -1,7 +1,9 @@
-/*Configuration of peer to peer
-
+/*
+Configuration of peer to peer
+https://codelabs.developers.google.com/codelabs/webrtc-web#0
 */
 const peerConnections = {};
+
 const config = {
   iceServers: [
     {
@@ -10,68 +12,115 @@ const config = {
   ]
 };
 
+//window.location.origin will obtain the current url/domain in browser
 const socket = io.connect(window.location.origin);
-const video = document.querySelector("video");
 
-// Media constraints
-const constraints = {
+//get the video element from the HTML
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+
+// hold local media stream tracks.
+var localTracks;
+
+//connection referrence
+var localPeerConnection;
+var remotePeerConnection;
+
+// Media constraints - allows you to specify what media to get
+//https://webrtc.github.io/samples/src/content/peerconnection/constraints/
+const mediaStreamConstraints = {
   video: { facingMode: "user" },
   audio: false //without audio buffer may get feedback
 };
 
-//get camera
-navigator.mediaDevices.getUserMedia(constraints).then(stream => {
-    
-    video.srcObject = stream;
-    socket.emit("emitter");
-  
-  }).catch(error => console.error(error));
-  
-/***** socket handle section for video connection *****/
-socket.on("receiver", id => {
-  const peerConnection = new RTCPeerConnection(config);
-  peerConnections[id] = peerConnection;
+// SUCCESS the video stream from the webcam is set as the source of the video element:
+function successLocalMediaStream(mediaStream){
+  localVideo.srcObject = mediaStream;
+  localTracks = mediaStream.getTracks();
+  //remoteVideo.srcObject = localVideo.srcObject;
+}
 
-  //add the local stream to the connection using the addTrack() method and passing our stream and track data
-  let stream = video.srcObject;
-  stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
-    
-  peerConnection.onicecandidate = event => {
-    if (event.candidate) {
-      socket.emit("candidate", id, event.candidate);
-    }
-  };
+// FAILURE error logging to console
+function failLocalMediaStream(error) {
+  console.log('navigator.getUserMedia error: ', error);
+}
 
-  peerConnection.createOffer().then(sdp => peerConnection.setLocalDescription(sdp))
+//get Camera media
+navigator.mediaDevices.getUserMedia(mediaStreamConstraints)
+  //SUCCESS
+  .then(successLocalMediaStream)
+  //FAILURE
+  .catch(failLocalMediaStream);
+  
+  
+  
+/***** socket handle section for stream connection *****/
+// Handles remote MediaStream success by adding it as the remoteVideo src.
+function gotRemoteMediaStream(event) {
+  remoteVideo.srcObject =  event.stream;
+}
+
+// Define RTC peer connection behavior.
+
+// Connects with new peer candidate.
+//https://github.com/googlecodelabs/webrtc-web/blob/c96ce33e3567b40cd4a5d005186554e33fb8418c/step-02/js/main.js#L83
+function handleConnection(event) {
+  const peerConnection = event.target;
+  const iceCandidate = event.candidate;
+
+  if (iceCandidate) {
+    const newIceCandidate = new RTCIceCandidate(iceCandidate);
+    const otherPeer = getOtherPeer(peerConnection);
+
+    otherPeer.addIceCandidate(newIceCandidate)
+      .then(peerConnection)
+      .catch(error);
+  }
+}
+
+const servers = null;  // Allows for RTC server configuration.
+
+// Logs offer creation and sets peer connection session descriptions.
+function createdOffer(description) {
+//https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/setLocalDescription
+  localPeerConnection.setLocalDescription(description)
     .then(() => {
-      socket.emit("offer", id, peerConnection.localDescription);
-    });
+      setLocalDescriptionSuccess(localPeerConnection);
+    })
+
+//https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/setRemoteDescription
+  remotePeerConnection.setRemoteDescription(description)
+    .then(() => {
+      setRemoteDescriptionSuccess(remotePeerConnection);
+    })
+
+  remotePeerConnection.createAnswer()
+    .then(createdAnswer)
     
-    peerConnection.ontrack = event => {
-    video.srcObject = event.streams[0];
-    };
+}
+
+function connectThePeople(){
+// Create peer connections and add behavior.
+localPeerConnection = new RTCPeerConnection(servers);
+
+localPeerConnection.addEventListener('icecandidate', handleConnection);
+
+remotePeerConnection = new RTCPeerConnection(servers);
+remotePeerConnection.addEventListener('icecandidate', handleConnection);
+
+// Add local stream to connection
+localPeerConnection.addTrack(localTracks);
+
+// create offer to connect.
+//https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createOffer
+localPeerConnection.createOffer(offerOptions)
+    .then(createdOffer)
+}
     
-});
-
-socket.on("answer", (id, description) => {
-  peerConnections[id].setRemoteDescription(description);
-});
-
-socket.on("candidate", (id, candidate) => {
-  peerConnections[id].addIceCandidate(new RTCIceCandidate(candidate));
-});
-
-socket.on("disconnectPeer", id => {
-  peerConnections[id].close();
-  delete peerConnections[id];
-});
- 
-//close the socket connection if the user closes the window.
-window.onunload = window.onbeforeunload = () => {
-  socket.close();
-};
-
-/***********/
+/*******************************************************/
+/*******************************************************/
+/*******************************************************/
+  
   
 /*
 USB Controller and Canvas

@@ -31,15 +31,17 @@ app.get('/', (request, response) => {
   response.sendFile(__dirname+'/public/html/home.html');
 });
 
-//var ip = '192.168.1.131';
 
-//add ip arg to serve on local host
 app.listen(port, () => {
   console.log(`App listening at http://localhost:${port}`);
 });
 
 let emitter;
 
+//cheat sheet
+//https://socket.io/docs/v3/emit-cheatsheet/index.html
+
+//remove the 'receiver concept'
 io.sockets.on("connection", socket => {
   
   socket.on("emitter", () => {
@@ -48,7 +50,7 @@ io.sockets.on("connection", socket => {
   });
   
   socket.on("receiver", () => {
-    socket.to(broadcaster).emit("receiver", socket.id);
+    socket.to(emitter).emit("receiver", socket.id);
   });
   
   socket.on("disconnect", () => {
