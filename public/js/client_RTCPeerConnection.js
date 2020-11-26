@@ -16,6 +16,8 @@ https://www.html5rocks.com/en/tutorials/webrtc/basics/
 Gabriel Tanner
 https://gabrieltanner.org/blog/webrtc-video-broadcast
 
+COR errors
+https://stackoverflow.com/questions/57181851/how-to-make-webrtc-application-works-on-the-internet
 */
 
 'use strict';
