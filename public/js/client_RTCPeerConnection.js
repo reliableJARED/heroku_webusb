@@ -102,6 +102,7 @@ socket.on('log', function(array) {
 function sendMessage(message) {
   console.log('Client sending message: ', message);
   socket.emit('message', message);
+  socket.emit('join',room);
 }
 
 // This client receives a message
@@ -175,7 +176,9 @@ if (location.hostname !== 'localhost') {
 }
 
 function maybeStart() {
+  
   console.log('>>>>>>> maybeStart() ', isStarted, localStream, isChannelReady);
+  
   if (!isStarted && typeof localStream !== 'undefined' && isChannelReady) {
     console.log('>>>>>> creating peer connection');
     createPeerConnection();
