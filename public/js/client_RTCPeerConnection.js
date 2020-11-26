@@ -29,9 +29,21 @@ var remoteStream;
 var turnReady;
 
 var pcConfig = {
-  'iceServers': [{
-    'urls': 'stun:stun.l.google.com:19302'
-  }]
+  'iceServers':[
+    {
+      'urls': 'stun:stun.l.google.com:19302'
+    },
+    {
+      'urls': 'turn:192.158.29.39:3478?transport=udp',
+      'credential': 'JZEOEt2V3Qb0y27GRntt2u2PAYA=',
+      'username': '28224511:1379330808'
+  },
+  {
+      'urls': 'turn:192.158.29.39:3478?transport=tcp',
+      'credential': 'JZEOEt2V3Qb0y27GRntt2u2PAYA=',
+      'username': '28224511:1379330808'
+   }
+  ]
 };
 
 // Set up audio and video regardless of what devices are present.
@@ -144,10 +156,20 @@ var constraints = {
 
 console.log('Getting user media with constraints', constraints);
 
+/*
+***
+requestTurn
+**
+^^THIS WILL NOT WORK!!!
+
+CORS error being thrown when deployed on Heroku
+TODO: try and fix using -
+https://elements.heroku.com/buttons/hashobject/twilio-stun-turn
+*/
 if (location.hostname !== 'localhost') {
-  requestTurn(
-    'https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913'
-  );
+  pc = new RTCPeerConnection(pcConfig);
+} else {
+  pc = new RTCPeerConnection(null);
 }
 
 function maybeStart() {
@@ -172,7 +194,7 @@ window.onbeforeunload = function() {
 
 function createPeerConnection() {
   try {
-    pc = new RTCPeerConnection(null);
+    pc = new RTCPeerConnection(pcConfig);
     pc.onicecandidate = handleIceCandidate;
     pc.onaddstream = handleRemoteStreamAdded;
     pc.onremovestream = handleRemoteStreamRemoved;

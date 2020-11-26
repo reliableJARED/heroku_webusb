@@ -96,7 +96,8 @@ app.get('/', (request, response) => {
   response.sendFile(__dirname+'/public/html/home.html');
 });
 
-
+//must listen on HTTP - see this SO error post
+//https://stackoverflow.com/questions/24793255/socket-io-cant-get-it-to-work-having-404s-on-some-kind-of-polling-call
 http.listen(port, () => {
   console.log(`App listening at http://localhost:${port}`);
 });
