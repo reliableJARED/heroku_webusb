@@ -49,6 +49,11 @@ var room = 'foo';
 //../public/js/socket.io.min.js
 var socket = io.connect();
 
+	socket.on('connect',function(msg){
+	    console.log("CONNECTED");
+			console.log(msg);
+		});
+
 if (room !== '') {
   socket.emit('create or join', room);
   console.log('Attempted to create or  join room', room);

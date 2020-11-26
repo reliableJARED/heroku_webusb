@@ -20,26 +20,6 @@ const io = require('socket.io')(http);
 
 const port = process.env.PORT || 5000;
 
-
-//required for serving locally when testing
-const serveStatic = require('serve-static');
-
-app.use('/',express.static(__dirname));//serve the main dir so the /public dir will work
-app.use(serveStatic(__dirname + '/public/css'));
-app.use(serveStatic(__dirname + '/public/js'));
-app.use(serveStatic(__dirname + '/public/html'));
-console.log('server directory: ' +__dirname);
-
-app.get('/', (request, response) => {
-  //use .sendFile NOT .send
-  response.sendFile(__dirname+'/public/html/home.html');
-});
-
-
-app.listen(port, () => {
-  console.log(`App listening at http://localhost:${port}`);
-});
-
 let emitter;
 
 //cheat sheet
@@ -92,4 +72,24 @@ io.sockets.on("connection", socket => {
     console.log('received bye');
   });
   
+});
+
+//required for serving locally when testing
+const serveStatic = require('serve-static');
+
+app.use('/',express.static(__dirname));//serve the main dir so the /public dir will work
+app.use(serveStatic(__dirname + '/public/css'));
+app.use(serveStatic(__dirname + '/public/js'));
+app.use(serveStatic(__dirname + '/public/html'));
+app.use(serveStatic(__dirname + '/node_modules/socket.io/client-dist/'));
+console.log('server directory: ' +__dirname);
+
+app.get('/', (request, response) => {
+  //use .sendFile NOT .send
+  response.sendFile(__dirname+'/public/html/home.html');
+});
+
+
+app.listen(port, () => {
+  console.log(`App listening at http://localhost:${port}`);
 });
