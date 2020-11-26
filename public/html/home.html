@@ -4,15 +4,19 @@
 -->
 <html>
   <head>
-    <title>USB Connector With Video</title>
+    <title>USB Connector With Peer Video</title>
 
   </head>
   <body>
-    <video id="localVideo" autoplay playsinline></video>
+    <video id="localVideo" autoplay muted playsinline></video><!-- no local sound -->
     <video id="remoteVideo" autoplay playsinline></video>
+    
     <canvas id="canvas">Your browser does not support the THML canvas tag</canvas>
-    <script src="/public/js/socket.io.min.js"></script><!-- KEEP AT BOTTOM -->
-		<script src="/public/js/client.js"></script><!-- KEEP AT BOTTOM -->
+    <script src="/public/js/socket.io.min.js"></script>
+    <script src="/public/js/client_RTCPeerConnection.js"></script>
+    <script src="/public/js/client_webUSB.js"></script><!-- KEEP AT BOTTOM -->
+		
+		
 		
   </body>
 </html>
