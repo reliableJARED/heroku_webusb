@@ -28,6 +28,13 @@ let emitter;
 //remove the 'receiver concept'
 io.sockets.on("connection", socket => {
   
+  // convenience function to log server messages on the client
+  function log() {
+    var array = ['Message from server:'];
+    array.push.apply(array, arguments);
+    socket.emit('log', array);
+  }
+  
     socket.on('message', function(message) {
     log('Client said: ', message);
     // for a real app, would be room-only (not broadcast)
@@ -81,7 +88,7 @@ app.use('/',express.static(__dirname));//serve the main dir so the /public dir w
 app.use(serveStatic(__dirname + '/public/css'));
 app.use(serveStatic(__dirname + '/public/js'));
 app.use(serveStatic(__dirname + '/public/html'));
-app.use(serveStatic(__dirname + '/node_modules/socket.io/client-dist/'));
+app.use(serveStatic(__dirname + '/node_modules'));
 console.log('server directory: ' +__dirname);
 
 app.get('/', (request, response) => {
@@ -90,6 +97,6 @@ app.get('/', (request, response) => {
 });
 
 
-app.listen(port, () => {
+http.listen(port, () => {
   console.log(`App listening at http://localhost:${port}`);
 });
