@@ -9,7 +9,9 @@ https://github.com/googlecodelabs/webrtc-web/blob/master/step-05/index.js
 
 */
 var os = require('os');
+
 const express = require("express");
+
 const app = express();
 
 //Express initializes app to be a function handler that you can supply to an HTTP server
@@ -28,54 +30,86 @@ let emitter;
 //remove the 'receiver concept'
 io.sockets.on("connection", socket => {
   
+
   // convenience function to log server messages on the client
-  function log() {
-    var array = ['Message from server:'];
-    array.push.apply(array, arguments);
-    socket.emit('log', array);
+  function log(stringMsg) {
+    socket.emit('log', stringMsg);
   }
   
-    socket.on('message', function(message) {
-    log('Client said: ', message);
+    socket.on('message', function(room,message) {
+    log('Client said: '+ message);
     // for a real app, would be room-only (not broadcast)
-    socket.broadcast.emit('message', message);
+    io.to(room).emit('message', message,socket.id);
   });
 
-  socket.on('join', function(room) {
-    console.log('request to join '+room);
+  socket.on('create or join', function(room) {
+    
+    //console.log('Received request to create or join room '+room);
     log('Received request to create or join room ' + room);
+    
+    let clientsInRoom;
+    
+    //first check if room already exists
+    if(!io.sockets.adapter.rooms.get(room)){
+      log('making room ' +room);
+      clientsInRoom = 0;
+    }
+    else{
+      //if room exists, find out how many people are in it
+      clientsInRoom = io.sockets.adapter.rooms.get(room).size;
+      console.log('have room ' +room);
+      log('Room ' + room + 'currently has ' + clientsInRoom + ' client(s)');
+    }
+    
 
-    var clientsInRoom = io.sockets.adapter.rooms[room];
-    var numClients = clientsInRoom ? Object.keys(clientsInRoom.sockets).length : 0;
-    log('Room ' + room + ' now has ' + numClients + ' client(s)');
-
-    if (numClients === 0) {
+    if (clientsInRoom === 0) {
       socket.join(room);
+      clientsInRoom = io.sockets.adapter.rooms.get(room).size;
+      //console.log(io.sockets.adapter.rooms);
+      //console.log(typeof(io.sockets.adapter.rooms.get(room)));
+      socket.emit('created',room,socket.id);
+      //io.to(room).emit('created', room, socket.id);
       log('Client ID ' + socket.id + ' created room ' + room);
-      socket.emit('created', room, socket.id);
+      log('Room ' + room + ' now has ' + clientsInRoom + ' client(s)');
+      //socket.emit('created', room, socket.id);
+      //clientsInRoom = io.sockets.adapter.rooms[room];
+      //console.log("room clients: "+clientsInRoom);
 
-    } else if (numClients === 1) {
-      log('Client ID ' + socket.id + ' joined room ' + room);
-      io.sockets.in(room).emit('join', room);
+    }
+    else if (clientsInRoom === 1) {
       socket.join(room);
+      clientsInRoom = io.sockets.adapter.rooms.get(room).size;
+      log('Client ID ' + socket.id + ' joined room ' + room);
+      //tell cleint, they joined
       socket.emit('joined', room, socket.id);
-      io.sockets.in(room).emit('ready');
-    } else { // max two clients
+      //tell all clients in room, room is ready
+      io.sockets.in(room).emit('newRoomMember',room,socket.id);
+      io.sockets.in(room).emit('ready',room);
+      log('Room ' + room + ' now has ' + clientsInRoom + ' client(s)');
+    }
+    else { // max two clients
       socket.emit('full', room);
     }
   });
 
-  socket.on('ipaddr', function() {
-    var ifaces = os.networkInterfaces();
-    for (var dev in ifaces) {
-      ifaces[dev].forEach(function(details) {
-        if (details.family === 'IPv4' && details.address !== '127.0.0.1') {
-          socket.emit('ipaddr', details.address);
-        }
-      });
-    }
+  socket.on('offer',(id,offer)=>{
+    //relay offer from Alice to Bob
+    console.log(id+" sent offer");
+    log('client ' + socket.id + ' sent an offer to ' + id);
+    socket.to(id).emit("offer", socket.id, offer);
   });
-
+  
+  socket.on('answer',(id,answer)=>{
+    //relay response from Bob to Alice
+     console.log(id+" sent answer");
+  });
+  
+ socket.on('candidate',(id,candidate)=>{
+    //relay response from Bob to Alice
+     console.log(id+" sent candidate");
+    
+  });
+  
   socket.on('bye', function(){
     console.log('received bye');
   });
