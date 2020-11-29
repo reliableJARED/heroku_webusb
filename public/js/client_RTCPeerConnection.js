@@ -65,7 +65,7 @@ const remoteVideo = document.querySelector('#remoteVideo');
 /* PREPARE localPeerConnection */
 const constraints = {
     video: true,
-    audio:false
+    audio:true
     };
 //FIRST - get local media stream
 const localStream = navigator.mediaDevices.getUserMedia(constraints);
