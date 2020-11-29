@@ -22,10 +22,36 @@ const io = require('socket.io')(http);
 
 const port = process.env.PORT || 5000;
 
-let emitter;
-
 //cheat sheet
 //https://socket.io/docs/v3/emit-cheatsheet/index.html
+
+function roomIDlocker(id,room){
+  const ids_room = {};
+  if(id && room){
+  (id,room)=>{ids_room[id]=room;};
+  }
+  else if(id && room === 'undefined'){
+    delete ids_room[id];
+  }
+  return ids_room;
+}
+
+function get_roomIDlocker(room){
+ const allclients = roomIDlocker();
+ const roomclients = Object.keys(allclients).find(key => allclients[key] === room);
+ //below is faster?
+ //const roomclients = Object.keys(allclients).filter(key => allclients[key] === room);
+ 
+ return roomclients;
+}
+
+function add_roomIDlocker(id,room){
+ roomIDlocker(id,room);
+}
+
+function remove_roomIDlocker(id){
+  roomIDlocker(id);
+}
 
 //remove the 'receiver concept'
 io.sockets.on("connection", socket => {
@@ -36,9 +62,8 @@ io.sockets.on("connection", socket => {
     socket.emit('log', stringMsg);
   }
   
-    socket.on('message', function(room,message) {
+  socket.on('message', function(room,message) {
     log('Client said: '+ message);
-    // for a real app, would be room-only (not broadcast)
     io.to(room).emit('message', message,socket.id);
   });
 
@@ -57,13 +82,16 @@ io.sockets.on("connection", socket => {
     else{
       //if room exists, find out how many people are in it
       clientsInRoom = io.sockets.adapter.rooms.get(room).size;
-      console.log('have room ' +room);
+      console.log(io.sockets.adapter.rooms.get(room))
+      console.log('room ' +room+' already exists');
       log('Room ' + room + 'currently has ' + clientsInRoom + ' client(s)');
     }
     
 
     if (clientsInRoom === 0) {
       socket.join(room);
+      add_roomIDlocker(socket.id,room);
+      
       clientsInRoom = io.sockets.adapter.rooms.get(room).size;
       //console.log(io.sockets.adapter.rooms);
       //console.log(typeof(io.sockets.adapter.rooms.get(room)));
@@ -78,12 +106,15 @@ io.sockets.on("connection", socket => {
     }
     else if (clientsInRoom === 1) {
       socket.join(room);
+      add_roomIDlocker(socket.id,room);
+      
       clientsInRoom = io.sockets.adapter.rooms.get(room).size;
       log('Client ID ' + socket.id + ' joined room ' + room);
       //tell cleint, they joined
       socket.emit('joined', room, socket.id);
+      //tell all clients, except sender, a new member joinded the room
+      socket.to(room).emit('newRoomMember',room,socket.id);
       //tell all clients in room, room is ready
-      io.sockets.in(room).emit('newRoomMember',room,socket.id);
       io.sockets.in(room).emit('ready',room);
       log('Room ' + room + ' now has ' + clientsInRoom + ' client(s)');
     }
@@ -91,6 +122,24 @@ io.sockets.on("connection", socket => {
       socket.emit('full', room);
     }
   });
+
+
+//TODO - find a way to get all members of a room
+socket.on('askForOtherRoomMembers',room=>{
+  //let allRoomMembers = get_roomIDlocker(room);
+  let allRoomMembers = io.sockets.adapter.rooms.get(room);
+  //remove self from list
+  allRoomMembers.delete(socket.id);
+  let scroll = allRoomMembers.values();
+
+    console.log('client: '+scroll[0]);
+  
+  //eventually change this to return a list of ALL socketIDs in the room
+  //var AllClients = Object.keys(io.sockets.in(room).connected)
+  console.log('all clients in room: '+allRoomMembers.entries());
+  log('all clients in room: '+ allRoomMembers);
+  socket.emit('newRoomMember',room,allRoomMembers);
+});
 
   socket.on('offer',(id,offer)=>{
     //relay offer from Alice to Bob
@@ -110,8 +159,9 @@ io.sockets.on("connection", socket => {
     
   });
   
-  socket.on('bye', function(){
-    console.log('received bye');
+  socket.on('bye', room=>{
+    remove_roomIDlocker(socket.id,room);
+    console.log('received bye from '+socket.id);
   });
   
 });
