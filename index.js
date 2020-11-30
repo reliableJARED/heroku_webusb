@@ -209,7 +209,9 @@ socket.on('candidate',(id,candidate)=>{
   });
   
   socket.on('bye', room=>{
-    console.log('received bye from '+socket.id);
+    log('received bye from '+socket.id);
+    //tell everyone they left
+    socket.to(room).emit('bye',socket.id)
   });
   
 });

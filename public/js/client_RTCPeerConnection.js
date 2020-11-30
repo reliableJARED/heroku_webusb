@@ -18,9 +18,17 @@ https://gabrieltanner.org/blog/webrtc-video-broadcast
 
 COR errors
 https://stackoverflow.com/questions/57181851/how-to-make-webrtc-application-works-on-the-internet
+
+Shane Tully
+https://shanetully.com/2014/09/a-dead-simple-webrtc-example/
 */
 
 'use strict';
+///////////////////Cross Browser Goodies/////////////////////////
+navigator.getUserMedia = navigator.getUserMedia || navigator.mozGetUserMedia || navigator.webkitGetUserMedia;
+window.RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+window.RTCIceCandidate = window.RTCIceCandidate || window.mozRTCIceCandidate || window.webkitRTCIceCandidate;
+window.RTCSessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
 
 /////////////////////////////////////////////
 
@@ -65,7 +73,7 @@ const remoteVideo = document.querySelector('#remoteVideo');
 /* PREPARE localPeerConnection */
 const constraints = {
     video: true,
-    audio:false
+    audio:true
     };
 //FIRST - get local media stream
 const localStream = navigator.mediaDevices.getUserMedia(constraints);
@@ -186,17 +194,26 @@ socket.on("offer", (id, description) => {
   const remotePeerConnection = new RTCPeerConnection(iceConfig);
   
   allPeerConnections[id] = remotePeerConnection;
-  
+  navigator.mediaDevices.getUserMedia(constraints)
+ .then(
+   (stream)=>{
+     stream.getTracks().forEach(track => remotePeerConnection.addTrack(track, stream));
+     return remotePeerConnection
+   })
+   .then(
   remotePeerConnection.setRemoteDescription(description)
-    .then(() => remotePeerConnection.createAnswer())
+    ).then(
+      () => remotePeerConnection.createAnswer()
+      )
     .then(sdp => remotePeerConnection.setLocalDescription(sdp))
     .then(() => {
-      console.log('sending answer to id: '+id);
+      console.log('sending answer: '+ remotePeerConnection.localDescription+ 'to id: '+id);
       socket.emit("answer", id, remotePeerConnection.localDescription);
     });
   remotePeerConnection.ontrack = event => {
     console.log('event');
     console.log(event);
+    console.log(event.streams[0]);
     remoteVideo.srcObject = event.streams[0];
   };
   remotePeerConnection.onicecandidate = event => {
@@ -209,15 +226,24 @@ socket.on("offer", (id, description) => {
 });
 
 socket.on("answer", (id, description) => {
-  /***** FIX THIS ASAP
-   * doesn't handle an answer, so the second connecting client can't see remote video
-   */
-  console.log('received answer from: '+id);
-  allPeerConnections[id].setRemoteDescription(description);
+
+  console.log( allPeerConnections[id]);
+   allPeerConnections[id].setRemoteDescription(description)
+   .then(
+     () => allPeerConnections[id].createAnswer()
+     );
+    
   allPeerConnections[id].ontrack = event => {
-    console.log('answer event');
+    console.log('event');
     console.log(event);
     remoteVideo.srcObject = event.streams[0];
+  };
+  allPeerConnections[id].onicecandidate = event => {
+    console.log('received event');
+    console.log(event);
+    if (event.candidate) {
+      socket.emit("candidate", id, event.candidate);
+    }
   };
 });
 
@@ -227,16 +253,17 @@ socket.on("candidate", (id, candidate) => {
   allPeerConnections[id].addIceCandidate(new RTCIceCandidate(candidate));
 });
 
-socket.on("disconnectPeer", id => {
-  allPeerConnections[id].close();
-  delete allPeerConnections[id];
-});
 
 //debug helper
 socket.on('log', function(msg) {
   //receive console.log() server messages - debug feature
   console.log('FROM SERVER LOG: '+msg);
 });
+
+socket.on('bye',(id)=>{
+  delete allPeerConnections[id];
+});
+
 
 window.onbeforeunload = function() {
   console.log('sending message bye');
