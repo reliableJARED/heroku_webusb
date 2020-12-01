@@ -24,13 +24,7 @@ https://shanetully.com/2014/09/a-dead-simple-webrtc-example/
 */
 
 'use strict';
-///////////////////Cross Browser Goodies/////////////////////////
-navigator.getUserMedia = navigator.getUserMedia || navigator.mozGetUserMedia || navigator.webkitGetUserMedia;
-window.RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
-window.RTCIceCandidate = window.RTCIceCandidate || window.mozRTCIceCandidate || window.webkitRTCIceCandidate;
-window.RTCSessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
 
-/////////////////////////////////////////////
 
 // Could prompt for room name:
 var room = 'chatRoom';
@@ -60,74 +54,30 @@ var iceConfig = {
          }
         ]
       };
-      
-//const remotePeerConnection = new RTCPeerConnection(iceConfig);
-const localPeerConnection = new RTCPeerConnection(iceConfig);
-const allPeerConnections = {};
-var localSocketID;
-var isInitiator = false; //flag to determine who starts RTC connection handshake
-var LocalMediaStreamReady = false; //flag if media is ready
-//////////////////////GET MEDIA ELEMENTS////////////////////////
-const remoteVideo = document.querySelector('#remoteVideo');
-
-/* PREPARE localPeerConnection */
+/////////////////////// CONSTRAINTS FOR getUserMedia //////////////////////////
+// https://developer.mozilla.org/en-US/docs/Web/API/Media_Streams_API/Constraints
 const constraints = {
-    video: true,
-    audio:true
-    };
-//FIRST - get local media stream
-const localStream = navigator.mediaDevices.getUserMedia(constraints);
+        video: {
+          width: { ideal: 640 },
+          height: {ideal: 400 }
+          },
+        audio:true
+        };
 
-localStream.then(
-  //SECOND - get the media stream tracks and add to the localPeerConnection, return stream for next .then()
-  (stream)=>{
-    stream.getTracks().forEach(track =>localPeerConnection.addTrack(track, stream));
-    return stream;
-    }
-  )
-  .then(
-  //THIRD - set localPeerConnection description, return stream for next .then()
-    (stream)=>{localPeerConnection.setLocalDescription();
-      return stream;
-    }
-  )
-  .then(
-  //FOURTH - set localVideo as localStream
-    setLocalVideo
-  )
-  .then(
-  //FIFTH - indicate local media stream is ready;
-    ()=>{LocalMediaStreamReady = true}
-  ).then(
-  //SIXTH - Send msg to server to join a room
-  joinARoom
-  );
-  
+////////////////////// GLOBAL TO HOLD CONNECTIONS ////////////////////////////////
+/*move this to a closure at some point*/
+const allPeerConnections = {};
+
+//////////////////////////  GET USER MEDIA //////////////////////////
+navigator.mediaDevices.getUserMedia(constraints).then(setLocalVideo);
+/* best is use an arrow function for setLocalVideo stream, done this way to make reading easier*/
+//////////////////////////  DISPLAY USER MEDIA for LOCAL //////////////////////////
 function setLocalVideo(stream){
   let localVideo = document.querySelector('#localVideo');
   localVideo.srcObject = stream;
 }
 
 
-//Done preparing local peerconnection for now
-
-function joinARoom(){
-  //response back if client joined an existing room called 'chatRoom'
-  socket.on('joined',  (room, socketID,isInitiatorClient)=> {
-  localSocketID = socketID;
-  isInitiator = isInitiatorClient;//if Flase, then start handshake.  Means others are in the room
-  console.log('Client joined '+room+' Client socketID is: ' + socketID+' Client created room: '+isInitiator);
-  
-  //need to ask for the other room members ID if you didn't create the room
-  /*if(!isInitiator){
-    socket.emit('askForOtherRoomMembers', room);
-  }*/
-  });
-}
-
-
-
-console.log(localPeerConnection);
 
 /*********** SOCKET FUNCTIONS
  */
@@ -144,28 +94,56 @@ socket.on('connect',(msg)=>{
 		});
 
 //response back if Client joined a room with other clients
-socket.on("newRoomMember", (room,id) => {
+socket.on("newRoomMember", (room,ids) => {
   //id an array of socket.IDs of other members
-  console.log(id.length+' other members in room: '+room);
-  console.log(id[0]);
-  
- // change '0' holder in id[0] when for loop completed
-  
-  //TODO - Eventually this will loop the Array of ALL member Socket.IDs in the room
-  //will need to create a RTCpc for each.
-  const remotePeerConnection = new RTCPeerConnection(iceConfig);
-  
-  allPeerConnections[id[0]] = remotePeerConnection;
+  console.log(ids.length+' other members in room: '+room);
+  console.log(ids);
 
- //IMPORTANT - everything has to wait for userMedia, so it's all chained to that promise .then()
+  //loop through all the room members and send offer to connect
+  for (var socketID of ids){
+    console.log('for loop '+ socketID)
+  const remotePeerConnection = createPeerConnectionOffer(socketID);
+  
+  allPeerConnections[socketID] = remotePeerConnection;
+
+  //create handler for the .onicecandidate method of RTCPeerConnection instance 
+  remotePeerConnection.onicecandidate = event => {
+        if (event.candidate) {
+          console.log('event candidate received, send back to id: '+socketID);
+          socket.emit("candidate", socketID, event.candidate);
+        }
+      };
+    }
+});
+
+function addMediaTrackToRemotePeerConnection(remotePeerConnection){
+  //const remotePeerConnection = new RTCPeerConnection(iceConfig);
+//IMPORTANT - everything has to wait for userMedia, so it's all chained to that promise .then()
  //https://stackoverflow.com/questions/38036552/rtcpeerconnection-onicecandidate-not-fire
  navigator.mediaDevices.getUserMedia(constraints)
  .then(
    (stream)=>{
+     //Add our local media tracks (audio/video) to the rPC object we are connecting through
      stream.getTracks().forEach(track => remotePeerConnection.addTrack(track, stream));
-     return remotePeerConnection
+     //return remotePeerConnection // returned so it can flow through the .then() chain
+   });
+   return remotePeerConnection;
+}
+
+function createPeerConnectionOffer (RemoteSocketID){
+  //iceConfig global 
+  const remotePeerConnection = new RTCPeerConnection(iceConfig);
+//IMPORTANT - everything has to wait for userMedia, so it's all chained to that promise .then()
+ //https://stackoverflow.com/questions/38036552/rtcpeerconnection-onicecandidate-not-fire
+ navigator.mediaDevices.getUserMedia(constraints)
+ .then(
+   (stream)=>{
+     //Add our local media tracks (audio/video) to the rPC object we are connecting through
+     stream.getTracks().forEach(track => remotePeerConnection.addTrack(track, stream));
+     return remotePeerConnection // returned so it can flow through the .then() chain
    })
  .then((rpc) =>{
+   //Now that the rPC has our media tracks associated, we can start the offer process.
    rpc.createOffer()
     .then(sdp => {
       rpc.setLocalDescription(sdp);
@@ -173,24 +151,37 @@ socket.on("newRoomMember", (room,id) => {
       return sdp;
     })
     .then((sdp) => {
-        console.log('sending offer to: '+id[0]);
-        console.log('localDescription: ');
+        console.log('sending offer to: '+RemoteSocketID);
         console.log(sdp);
-        socket.emit("offer", id[0], sdp);
+        socket.emit("offer", RemoteSocketID, sdp);
       })
     });
 
-  //create handler for the .onicecandidate method of RTCPeerConnection instance localPeerConnection
-  remotePeerConnection.onicecandidate = event => {
-        if (event.candidate) {
-          console.log('event candidate received, send back to id: '+id[0]);
-          socket.emit("candidate", id[0], event.candidate);
-        }
-      };
-});
 
+    return remotePeerConnection;
+}
+
+function createRemoteVideoHTMLNode (id){
+
+  //*create a new video element to show our remote video
+  const remoteVideo = document.createElement("video");
+  //set it to autoplay video
+  remoteVideo.autoplay = true;
+  //give it the socket id as an id so we can reference easily
+  remoteVideo.setAttribute("id",id);
+  //attach our remote video element to container, 
+  document.getElementById('remoteVideoContainer').appendChild(remoteVideo)
+  return;
+}
 socket.on("offer", (id, description) => {
+  //////// SO Similar to the createPeerConnectionOffer flow, should really combine in to a few single working functions
+
   console.log('offer: '+description+' from: '+id);
+
+  //create a video element to hold the remote stream
+  createRemoteVideoHTMLNode (id);
+
+  //create a new RTCPeerConnection object to be associated with this offer
   const remotePeerConnection = new RTCPeerConnection(iceConfig);
   
   allPeerConnections[id] = remotePeerConnection;
@@ -214,29 +205,34 @@ socket.on("offer", (id, description) => {
     console.log('event');
     console.log(event);
     console.log(event.streams[0]);
-    remoteVideo.srcObject = event.streams[0];
+    let remoteVideoElement = document.getElementById(id);
+    //set the remote stream to our video html element
+    remoteVideoElement.srcObject = event.streams[0];
   };
-  remotePeerConnection.onicecandidate = event => {
+  remotePeerConnection.onicecandidate = event=>{
     console.log('received event');
     console.log(event);
     if (event.candidate) {
-      socket.emit("candidate", id, event.candidate);
+       socket.emit("candidate", id, event.candidate);
     }
-  };
+  }
 });
 
-socket.on("answer", (id, description) => {
 
-  console.log( allPeerConnections[id]);
+
+socket.on("answer", (id, description) => {
+   //create a video element to hold the remote stream
+   createRemoteVideoHTMLNode (id);
+
+  //console.log( allPeerConnections[id]);
    allPeerConnections[id].setRemoteDescription(description)
-   .then(
-     () => allPeerConnections[id].createAnswer()
-     );
-    
+
   allPeerConnections[id].ontrack = event => {
+    //const remoteVideo = document.querySelector('#remoteVideo');
+    let remoteVideoElement = document.getElementById(id);
     console.log('event');
     console.log(event);
-    remoteVideo.srcObject = event.streams[0];
+    remoteVideoElement.srcObject = event.streams[0];
   };
   allPeerConnections[id].onicecandidate = event => {
     console.log('received event');
@@ -261,6 +257,8 @@ socket.on('log', function(msg) {
 });
 
 socket.on('bye',(id)=>{
+  let remoteVideoElement = document.getElementById(id);
+  remoteVideoElement.remove();
   delete allPeerConnections[id];
 });
 

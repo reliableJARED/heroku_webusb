@@ -7,9 +7,23 @@
     <title>USB Connector With Peer Video</title>
 
   </head>
+  <style>
+    video {
+      vertical-align:middle;
+      width: auto;
+    }
+    
+    #localVideo {
+      width:10%;
+    }
+    </style>
+
   <body>
     <video id="localVideo" autoplay muted playsinline></video><!-- no local sound -->
-    <video id="remoteVideo" autoplay playsinline></video>
+    <!-- <video id="remoteVideo" autoplay playsinline></video> -->
+    <div id="remoteVideoContainer">
+      
+    </div>
     
     <canvas id="canvas">Your browser does not support the THML canvas tag</canvas>
   <!--  <script src="/public/js/socket.io.min.js"></script>-->
@@ -18,9 +32,7 @@
 		<script src="/public/js/client_RTCPeerConnection.js"></script>
 		
 		 <div>
-      <button id="startButton">Start</button>
-      <button id="callButton">Call</button>
-      <button id="hangupButton">Hang Up</button>
+      <button id="callButton">Call</button><!-- this doesn't do anything at the moment-->
     </div>
 		
   </body>

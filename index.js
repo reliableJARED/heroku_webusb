@@ -7,6 +7,8 @@ https://gabrieltanner.org/blog/webrtc-video-broadcast
 
 https://github.com/googlecodelabs/webrtc-web/blob/master/step-05/index.js
 
+Helpful SO thread on getting socketIDs in a given room
+https://stackoverflow.com/questions/56498263/room-name-is-not-assigned-correctly-in-socket-io
 */
 var os = require('os');
 
@@ -83,7 +85,7 @@ function joinRoom(soc,room,password){
 
 socket.on('create or join', (room,password) =>{
     //MAXIMUM Room Members
-    const maxRoomMembers = 2;
+    const maxRoomMembers = 4;
     
     //eventually use ONLY auto-generated room names.  Would also have to check against all current room names.
     //something like randomMath or better.  Socket.io may already have function i just don't know atm
@@ -155,10 +157,22 @@ socket.on('create or join', (room,password) =>{
         
         //get all room members
         let allRoomMembers = io.sockets.adapter.rooms.get(room);
-        //remove self from Set
-        allRoomMembers.delete(socket.id);
+        /*
+        UNDERSTANDING NEEDED
+        current code works, but not sure why
+        don't seem to need to remove self from allRoomMembers
+        in fact, if you do it breaks... why?
+        suspect that the socket.id is the first key in the allRoomMembers object?
+        */
+        //uncomment below will break everything, thought it would just remove self from Set
+        //allRoomMembers.delete(socket.id);
+        
         //convert Set object to Array
         let allRoomMembers_array = Array.from(allRoomMembers);
+
+        
+
+
         //tell sender who is in the room, excluding self
         socket.emit('newRoomMember',room,allRoomMembers_array);
 
@@ -166,6 +180,7 @@ socket.on('create or join', (room,password) =>{
         log('Room ' + room + ' now has ' + clientsInRoom + ' client(s)');
       }
       else{ // maximum occupancy
+        log('room '+room+ ' is full')
         socket.emit('full', room);
       }
     }
