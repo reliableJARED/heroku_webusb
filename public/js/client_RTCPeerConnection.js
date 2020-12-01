@@ -56,13 +56,24 @@ var iceConfig = {
       };
 /////////////////////// CONSTRAINTS FOR getUserMedia //////////////////////////
 // https://developer.mozilla.org/en-US/docs/Web/API/Media_Streams_API/Constraints
-const constraints = {
-        video: {
+
+/* *******  iPhone issue ********* 
+https://bugs.webkit.org/show_bug.cgi?id=208667
+https://stackoverflow.com/questions/63084076/ios13-getusermedia-not-working-on-chrome-and-edge
+
+when constraints has audio:false, iphone can connect
+to the app when it's on heroku.  Else, it can't.  Suspect it's related
+to only allowing video? idk, but it's annoying 30nov2020
+*/
+
+//if iPhone user agent, ONLY set video constraint, else include audio and width/height
+const constraints = navigator.userAgent.includes("iPhone") ? {video:true} : {
+    audio:true,
+      video: {
           width: { ideal: 640 },
           height: {ideal: 400 }
-          },
-        audio:true
-        };
+          }    
+    };
 
 ////////////////////// GLOBAL TO HOLD CONNECTIONS ////////////////////////////////
 /*move this to a closure at some point*/

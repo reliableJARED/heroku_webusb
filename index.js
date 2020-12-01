@@ -85,7 +85,7 @@ function joinRoom(soc,room,password){
 
 socket.on('create or join', (room,password) =>{
     //MAXIMUM Room Members
-    const maxRoomMembers = 4;
+    const maxRoomMembers = 5;
     
     //eventually use ONLY auto-generated room names.  Would also have to check against all current room names.
     //something like randomMath or better.  Socket.io may already have function i just don't know atm
@@ -135,7 +135,7 @@ socket.on('create or join', (room,password) =>{
       log('Room ' + room + ' currently has ' + clientsInRoom + ' client(s)');
       
        //if room exists, find out if it's too full to join
-      if (clientsInRoom < maxRoomMembers) {
+      if (clientsInRoom <= maxRoomMembers) {
         //PLACE HOLDER - eventually move this workflow to function
         joinRoom(socket,room,password);
       
