@@ -183,6 +183,8 @@ socket.on('create or join', (room,password) =>{
         log('room '+room+ ' is full')
         socket.emit('full', room);
       }
+    }else{
+      log('wrong password for room:'+room)
     }
     
   });

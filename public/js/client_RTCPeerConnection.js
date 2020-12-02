@@ -26,9 +26,11 @@ https://shanetully.com/2014/09/a-dead-simple-webrtc-example/
 'use strict';
 
 
-// Could prompt for room name:
+// Could prompt for room name, hardcode for now
 var room = 'chatRoom';
 // room = prompt('Enter room name:');
+
+var password = prompt('enter the room password:');
 
 var socket = io.connect();
 
@@ -99,12 +101,16 @@ socket.on('connect',(msg)=>{
       //room is hardcoded atm, so this should always run
       //TODO - add a user input for room to join existing room
       if (room !== '') {
-        socket.emit('create or join', room);
+        socket.emit('create or join', room,password);
         console.log('Asking server to create or join room: ', room);
         }
 		});
 
+
+
 //response back if Client joined a room with other clients
+//this will cause Client to start the RTCpeerconnection handshake they will be the
+// 'offer' client
 socket.on("newRoomMember", (room,ids) => {
   //id an array of socket.IDs of other members
   console.log(ids.length+' other members in room: '+room);
@@ -112,13 +118,15 @@ socket.on("newRoomMember", (room,ids) => {
 
   //loop through all the room members and send offer to connect
   for (var socketID of ids){
-    console.log('for loop '+ socketID)
-  const remotePeerConnection = createPeerConnectionOffer(socketID);
-  
-  allPeerConnections[socketID] = remotePeerConnection;
+    console.log('for loop connection offer to:'+ socketID)
+    //make an offer to one of the clients in the room
+    const remotePeerConnection = createPeerConnectionOffer(socketID);
 
-  //create handler for the .onicecandidate method of RTCPeerConnection instance 
-  remotePeerConnection.onicecandidate = event => {
+    //associate this rPC with the specific socketID so peer-peer comms can happen
+    allPeerConnections[socketID] = remotePeerConnection;
+
+    //create handler for the .onicecandidate method of RTCPeerConnection instance 
+    remotePeerConnection.onicecandidate = event => {
         if (event.candidate) {
           console.log('event candidate received, send back to id: '+socketID);
           socket.emit("candidate", socketID, event.candidate);
@@ -127,49 +135,62 @@ socket.on("newRoomMember", (room,ids) => {
     }
 });
 
-function addMediaTrackToRemotePeerConnection(remotePeerConnection){
+async function addMediaTrackToRemotePeerConnection(remotePeerConnection){
   //const remotePeerConnection = new RTCPeerConnection(iceConfig);
 //IMPORTANT - everything has to wait for userMedia, so it's all chained to that promise .then()
  //https://stackoverflow.com/questions/38036552/rtcpeerconnection-onicecandidate-not-fire
- navigator.mediaDevices.getUserMedia(constraints)
- .then(
-   (stream)=>{
-     //Add our local media tracks (audio/video) to the rPC object we are connecting through
-     stream.getTracks().forEach(track => remotePeerConnection.addTrack(track, stream));
-     //return remotePeerConnection // returned so it can flow through the .then() chain
-   });
-   return remotePeerConnection;
+ const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+  //Add our local media tracks (audio/video) to the rPC object we are connecting through
+  stream.getTracks().forEach(track => remotePeerConnection.addTrack(track, stream));
+
+  //return remotePeerConnection with its new tracks
+  return remotePeerConnection;
 }
+
+
 
 function createPeerConnectionOffer (RemoteSocketID){
   //iceConfig global 
   const remotePeerConnection = new RTCPeerConnection(iceConfig);
-//IMPORTANT - everything has to wait for userMedia, so it's all chained to that promise .then()
- //https://stackoverflow.com/questions/38036552/rtcpeerconnection-onicecandidate-not-fire
- navigator.mediaDevices.getUserMedia(constraints)
- .then(
-   (stream)=>{
-     //Add our local media tracks (audio/video) to the rPC object we are connecting through
-     stream.getTracks().forEach(track => remotePeerConnection.addTrack(track, stream));
-     return remotePeerConnection // returned so it can flow through the .then() chain
-   })
+//IMPORTANT - everything has to wait for userMedia
+ addMediaTrackToRemotePeerConnection(remotePeerConnection)
  .then((rpc) =>{
-   //Now that the rPC has our media tracks associated, we can start the offer process.
-   rpc.createOffer()
-    .then(sdp => {
-      rpc.setLocalDescription(sdp);
-      //there was an issue with the set completion and the emit, bubble the sdp through .then()
-      return sdp;
-    })
-    .then((sdp) => {
-        console.log('sending offer to: '+RemoteSocketID);
-        console.log(sdp);
-        socket.emit("offer", RemoteSocketID, sdp);
+    //Now that the rpc 'remotePeerConnection' has our media tracks associated, we can start the offer process.
+    rpc.createOffer()
+      //createOffer returns our local network description
+      .then(sdp => {
+        rpc.setLocalDescription(sdp);
+        return sdp;
       })
-    });
+      .then((sdp) => {
+          console.log('sending offer to: '+RemoteSocketID, sdp);
+          socket.emit("offer", RemoteSocketID, sdp);
+        })
+    })
+ .catch(learnFromMistakes);
 
 
     return remotePeerConnection;
+}
+
+function createPeerConnectionAnswer (RemoteSocketID,description){
+//iceConfig global 
+const remotePeerConnection = new RTCPeerConnection(iceConfig);
+//IMPORTANT - everything has to wait for userMedia
+ addMediaTrackToRemotePeerConnection(remotePeerConnection)
+ //add the remote client description to the rpc 
+ .then(remotePeerConnection.setRemoteDescription(description))
+ //create a local description Object
+ .then(() => remotePeerConnection.createAnswer())
+ //attach the local description to the rpc 
+ .then(sdp => remotePeerConnection.setLocalDescription(sdp))
+ //finally, add a way to signal the answer back
+ .then(() => {
+  console.log('sending answer: '+ remotePeerConnection.localDescription+ 'to id: '+id);
+  socket.emit("answer", id, remotePeerConnection.localDescription);
+  })
+  .catch(learnFromMistakes);
 }
 
 function createRemoteVideoHTMLNode (id){
@@ -187,7 +208,7 @@ function createRemoteVideoHTMLNode (id){
 socket.on("offer", (id, description) => {
   //////// SO Similar to the createPeerConnectionOffer flow, should really combine in to a few single working functions
 
-  console.log('offer: '+description+' from: '+id);
+  console.log('offer from: '+id, description);//show description object as json
 
   //create a video element to hold the remote stream
   createRemoteVideoHTMLNode (id);
@@ -212,9 +233,10 @@ socket.on("offer", (id, description) => {
       console.log('sending answer: '+ remotePeerConnection.localDescription+ 'to id: '+id);
       socket.emit("answer", id, remotePeerConnection.localDescription);
     });
+
+    //trying to fix issue with iphone, mannually add tracks to a MediaSource
   remotePeerConnection.ontrack = event => {
     console.log('event');
-    console.log(event);
     console.log(event.streams[0]);
     let remoteVideoElement = document.getElementById(id);
     //set the remote stream to our video html element
@@ -261,7 +283,7 @@ socket.on("candidate", (id, candidate) => {
 });
 
 
-//debug helper
+//debug helper for serverm
 socket.on('log', function(msg) {
   //receive console.log() server messages - debug feature
   console.log('FROM SERVER LOG: '+msg);
@@ -278,3 +300,8 @@ window.onbeforeunload = function() {
   console.log('sending message bye');
   socket.emit('bye',room);
 };
+
+//error message handler
+function learnFromMistakes(youFailed){
+  console.log('so close, here is where it all went wrong:',youFailed)
+}
